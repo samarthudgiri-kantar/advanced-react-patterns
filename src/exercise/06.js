@@ -2,7 +2,8 @@
 // http://localhost:3000/isolated/exercise/06.js
 
 import * as React from 'react'
-import {Switch} from '../switch'
+import warning from 'warning';
+import { Switch } from '../switch'
 
 const callAll = (...fns) => (...args) => fns.forEach(fn => fn?.(...args))
 
@@ -11,10 +12,10 @@ const actionTypes = {
   reset: 'reset',
 }
 
-function toggleReducer(state, {type, initialState}) {
+function toggleReducer(state, { type, initialState }) {
   switch (type) {
     case actionTypes.toggle: {
-      return {on: !state.on}
+      return { on: !state.on }
     }
     case actionTypes.reset: {
       return initialState
@@ -28,18 +29,23 @@ function toggleReducer(state, {type, initialState}) {
 function useToggle({
   initialOn = false,
   reducer = toggleReducer,
-  // 🐨 add an `onChange` prop.
-  // 🐨 add an `on` option here
-  // 💰 you can alias it to `controlledOn` to avoid "variable shadowing."
+  onChange,
+  on: controlledOn,
+  readOnly = false
 } = {}) {
-  const {current: initialState} = React.useRef({on: initialOn})
+  const { current: initialState } = React.useRef({ on: initialOn })
   const [state, dispatch] = React.useReducer(reducer, initialState)
-  // 🐨 determine whether on is controlled and assign that to `onIsControlled`
-  // 💰 `controlledOn != null`
 
-  // 🐨 Replace the next line with `const on = ...` which should be `controlledOn` if
-  // `onIsControlled`, otherwise, it should be `state.on`.
-  const {on} = state
+  const onIsControlled = `controlledOn != null`
+  const on = onIsControlled ? controlledOn : state.on
+  const {on: onWasControlled} = React.useRef(onIsControlled);
+
+  React.useEffect(() => {
+    warning(
+      !(onIsControlled && !onWasControlled),
+      'Changing from Uncontrolled to Controlled'
+    )
+  }, [onIsControlled, onWasControlled])
 
   // We want to call `onChange` any time we need to make a state change, but we
   // only want to call `dispatch` if `!onIsControlled` (otherwise we could get
@@ -65,11 +71,24 @@ function useToggle({
   // 💰 Also note that user's don't *have* to pass an `onChange` prop (it's not required)
   // so keep that in mind when you call it! How could you avoid calling it if it's not passed?
 
-  // make these call `dispatchWithOnChange` instead
-  const toggle = () => dispatch({type: actionTypes.toggle})
-  const reset = () => dispatch({type: actionTypes.reset, initialState})
+  const hasOnChange = Boolean(onChange);
+  React.useEffect(() => {
+    warning(
+      !(!hasOnChange && onIsControlled && !readOnly),
+      "Something went wrong"
+    )
+  }, [hasOnChange, onIsControlled, readOnly])
 
-  function getTogglerProps({onClick, ...props} = {}) {
+  function dispatchWithOnChange(params) {
+    if (!onIsControlled) {
+      dispatch(params);
+    }
+    onChange?.(reducer({ ...state, on }, params), params);
+  }
+  const toggle = () => dispatchWithOnChange({ type: actionTypes.toggle })
+  const reset = () => dispatchWithOnChange({ type: actionTypes.reset, initialState })
+
+  function getTogglerProps({ onClick, ...props } = {}) {
     return {
       'aria-pressed': on,
       onClick: callAll(onClick, toggle),
@@ -77,7 +96,7 @@ function useToggle({
     }
   }
 
-  function getResetterProps({onClick, ...props} = {}) {
+  function getResetterProps({ onClick, ...props } = {}) {
     return {
       onClick: callAll(onClick, reset),
       ...props,
@@ -93,9 +112,9 @@ function useToggle({
   }
 }
 
-function Toggle({on: controlledOn, onChange}) {
-  const {on, getTogglerProps} = useToggle({on: controlledOn, onChange})
-  const props = getTogglerProps({on})
+function Toggle({ on: controlledOn, onChange, readOnly }) {
+  const { on, getTogglerProps } = useToggle({ on: controlledOn, onChange, readOnly })
+  const props = getTogglerProps({ on })
   return <Switch {...props} />
 }
 
@@ -119,7 +138,7 @@ function App() {
   return (
     <div>
       <div>
-        <Toggle on={bothOn} onChange={handleToggleChange} />
+        <Toggle on={bothOn} readOnly={true} />
         <Toggle on={bothOn} onChange={handleToggleChange} />
       </div>
       {timesClicked > 4 ? (
@@ -146,7 +165,7 @@ function App() {
 
 export default App
 // we're adding the Toggle export for tests
-export {Toggle}
+export { Toggle }
 
 /*
 eslint
